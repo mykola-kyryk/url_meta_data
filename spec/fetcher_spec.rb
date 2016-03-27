@@ -1,11 +1,45 @@
 require 'spec_helper'
 
 RSpec.describe UrlMetaData::Fetcher do
-  let(:url) { url = 'http://www.google.com' }
-  subject(:fetcher) { described_class.fetch(url) }
+  before do
+    stub_request(:get, url).to_return(body: response_body,
+                                      status: response_code,
+                                      headers: response_headers)
+  end
+
+  let(:url) { 'http://www.google.com' }
+  let(:response_code) { 200 }
+  let(:response_body) { 'Body' }
+  let(:response_headers) { {} }
+
+  subject { described_class.fetch(url) }
 
   example do
     expect { subject }.not_to raise_error
     expect { described_class.new(url) }.to raise_error NoMethodError
   end
+
+  context '#fetch' do
+    it 'returns body of response' do
+      expect(subject).to eq response_body
+    end
+
+    context 'status 302' do
+      let(:redirect_url) { 'http://new.url.com' }
+      let(:response_code) { 302 }
+      let(:redirect_response_body) { 'Redirected' }
+      let(:response_headers) { {'Location' => redirect_url} }
+
+      before do
+        stub_request(:get, redirect_url).to_return(body: redirect_response_body,
+                                          status: 200,
+                                          headers: {})
+      end
+
+      it 'follows redirects' do
+         expect(subject).to eq redirect_response_body
+      end
+    end
+  end
+
 end
