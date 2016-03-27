@@ -1,4 +1,6 @@
 require "url_meta_data_fetcher/version"
+require 'faraday'
+require 'faraday_middleware'
 
 module UrlMetaData
 
@@ -18,7 +20,16 @@ module UrlMetaData
     end
 
     def fetch
-      # Process url
+      response = connection.get(url)
+      response.body
+    end
+
+    def connection
+      @connection ||= Faraday.new do |faraday|
+        faraday.response :logger
+        faraday.adapter Faraday.default_adapter
+        faraday.use FaradayMiddleware::FollowRedirects
+      end
     end
   end
 
