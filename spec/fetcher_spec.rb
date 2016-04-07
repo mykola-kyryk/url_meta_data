@@ -1,65 +1,78 @@
 require 'spec_helper'
 
 RSpec.describe UrlMetaData::Fetcher do
-  before do
-    stub_request(:get, url).
-      to_return(
-        body: response_body,
-        status: response_code,
-        headers: response_headers
-      )
-  end
-
-  let(:url) { 'http://www.google.com' }
-  let(:response_code) { 200 }
-  let(:response_body) { 'Body' }
-  let(:response_headers) { {} }
-
-  subject { described_class.fetch(url) }
-
-  example do
-    expect { subject }.not_to raise_error
-    expect { described_class.new(url) }.to raise_error NoMethodError
-  end
-
   context '#fetch' do
-    it 'returns body of response' do
-      expect(subject).to eq response_body
+    let(:url) { 'http://www.google.com' }
+    subject { described_class.fetch(url) }
+
+    context 'positive path' do
+      before do
+        stub_request(:get, url).
+          to_return(
+            body: html_document,
+            status: 200 ,
+            headers: {}
+          )
+      end
+
+      let(:html_document) do
+        [
+          '<html><head>',
+          "<title>#{document_title_content}</title>",
+          "<meta name='keywords' content='#{meta_keywords_content}' />",
+          "<meta name='description' content='#{meta_description_content}' />",
+          '</head><body></body></html>',
+        ].join
+      end
+      let(:document_title_content) { 'Test title' }
+      let(:meta_keywords_content) { 'keyword1, keyword2' }
+      let(:meta_description_content) { 'Test meta description' }
+
+      let(:expected_page_attributes) do
+        {
+          title: document_title_content,
+          keywords: meta_keywords_content,
+          description: meta_description_content,
+        }
+      end
+
+      example do
+        expect { subject }.not_to raise_error
+      end
+
+      it 'returns attributes of the fetched page' do
+        expect(subject).to eq expected_page_attributes
+      end
     end
 
-    context 'status 301-303' do
-      let(:response_code) { %w(301 302 303).sample }
+    context 'negative path' do
+      let(:expected_page_attributes) do
+        {
+          title: nil,
+          keywords: nil,
+          description: nil,
+        }
+      end
 
-      context 'follow the redirect' do
+      context 'connection timeout' do
         before do
-          stub_request(:get, redirect_url).
-            to_return(
-              body: redirect_response_body,
-              status: 200,
-              headers: {}
-            )
+          stub_request(:get, url).to_timeout
         end
-        let(:response_headers) { { 'Location' => redirect_url } }
-        let(:redirect_url) { 'https://github.com/status' }
-        let(:redirect_response_body) { 'Redirected' }
 
-        example do
-          expect(subject).to eq redirect_response_body
+        it 'does not raise errors and returns nils as default result' do
+          expect { subject }.not_to raise_error
+          expect(subject).to eq expected_page_attributes
         end
       end
 
-      context 'raises if more than 5 redirects are encountered' do
+      context 'unvalid URI' do
         before do
-          stub_request(:get, url).
-            to_return(
-              body: 'abc',
-              status: response_code,
-              headers: { 'Location' => url } # loop redirects
-            )
+          stub_request(:get, url).to_raise(SocketError)
         end
 
-        example do
-          expect(subject).to eq ''
+        it 'does not raise errors and returns nils as default result' do
+          expect { subject }.not_to raise_error
+          expect(subject).to eq expected_page_attributes
         end
       end
     end
